@@ -1,3 +1,2 @@
-*.sublime*
-cow-proxy
-bin
+/cow
+

@@ -2,12 +2,18 @@ package main
 
 import (
 	// "flag"
+
 	"os"
 	"os/exec"
 	"runtime"
+
+	"github.com/sirupsen/logrus"
+
 	// "runtime/pprof"
 	"sync"
 	"syscall"
+
+	"github.com/pkg/errors"
 )
 
 // var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
@@ -28,7 +34,28 @@ func lookPath() (argv0 string, err error) {
 	return
 }
 
+func setRlimitNofile() error {
+	var rLimit syscall.Rlimit
+	err := syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
+	if err != nil {
+		return errors.Wrap(err, "Error Getting Rlimit")
+	}
+	rLimit.Max = 999999
+	rLimit.Cur = 999999
+	err = syscall.Setrlimit(syscall.RLIMIT_NOFILE, &rLimit)
+	if err != nil {
+		return errors.Wrap(err, "Error Setting Rlimit")
+	}
+	err = syscall.Getrlimit(syscall.RLIMIT_NOFILE, &rLimit)
+	if err != nil {
+		return errors.Wrap(err, "Error Getting Rlimit")
+	}
+	logrus.Infof("Rlimit Final, Max: %d, Cur: %d", rLimit.Max, rLimit.Cur)
+	return nil
+}
+
 func main() {
+	setRlimitNofile()
 	quit = make(chan struct{})
 	// Parse flags after load config to allow override options in config
 	cmdLineConfig := parseCmdLineConfig()
