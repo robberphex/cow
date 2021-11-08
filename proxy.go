@@ -13,6 +13,7 @@ import (
 	"github.com/cyfdecyf/bufio"
 	"github.com/cyfdecyf/leakybuf"
 	ss "github.com/shadowsocks/shadowsocks-go/shadowsocks"
+	"github.com/sirupsen/logrus"
 )
 
 // As I'm using ReadSlice to read line, it's possible to get
@@ -90,6 +91,7 @@ type serverConn struct {
 	willCloseOn time.Time
 	siteInfo    *VisitCnt
 	visited     bool
+	Proxied     bool
 }
 
 type clientConn struct {
@@ -420,11 +422,22 @@ func dbgPrintRq(c *clientConn, r *Request) {
 		errl.Printf("cli(%s) request  %s has Trailer header\n%s",
 			c.RemoteAddr(), r, r.Verbose())
 	}
+}
+
+func dbgPrintRq2(c *clientConn, sv *serverConn, r *Request) {
+	proxy := "direct"
+	if sv.Proxied {
+		proxy = "proxy"
+	}
+	if r.Trailer {
+		errl.Printf("cli(%s) request  %s has Trailer header\n%s",
+			c.RemoteAddr(), r, r.Verbose())
+	}
 	if dbgRq {
 		if verbose {
-			dbgRq.Printf("cli(%s) request  %s\n%s", c.RemoteAddr(), r, r.Verbose())
+			logrus.Infof("cli(%s) %s  %s\n%s", c.RemoteAddr(), proxy, r, r.Verbose())
 		} else {
-			dbgRq.Printf("cli(%s) request  %s\n", c.RemoteAddr(), r)
+			logrus.Infof("cli(%s) %s  %s", c.RemoteAddr(), proxy, r)
 		}
 	}
 }
@@ -486,7 +499,7 @@ func (c *clientConn) serve() {
 
 		if auth.required && !authed {
 			if err = Authenticate(c, &r); err != nil {
-				errl.Printf("cli(%s) %v\n", c.RemoteAddr(), err)
+				errl.Printf("cli(%s) x %v\n", c.RemoteAddr(), err)
 				// Request may have body. To make things simple, close
 				// connection so we don't need to skip request body before
 				// reading the next request.
@@ -533,6 +546,7 @@ func (c *clientConn) serve() {
 			}
 			return
 		}
+		dbgPrintRq2(c, sv, &r)
 
 		if r.isConnect {
 			// server connection will be closed in doConnect
@@ -868,6 +882,11 @@ func (c *clientConn) createServerConn(r *Request, siteInfo *VisitCnt) (*serverCo
 		return nil, err
 	}
 	sv := newServerConn(srvconn, r.URL.HostPort, siteInfo)
+	if _, ok := srvconn.(directConn); ok {
+		sv.Proxied = false
+	} else {
+		sv.Proxied = true
+	}
 	if debug {
 		debug.Printf("cli(%s) connected to %s %d concurrent connections\n",
 			c.RemoteAddr(), sv.hostPort, incSrvConnCnt(sv.hostPort))

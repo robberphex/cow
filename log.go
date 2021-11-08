@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"os"
+	ddebug "runtime/debug"
 
 	"github.com/cyfdecyf/color"
 )
@@ -114,6 +115,7 @@ func (d requestLogging) Printf(format string, args ...interface{}) {
 
 func (d responseLogging) Printf(format string, args ...interface{}) {
 	if d {
+		ddebug.PrintStack()
 		responseLog.Printf(format, args...)
 	}
 }
